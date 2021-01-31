@@ -30,11 +30,11 @@ HEADER_SIZE = 24
 # used to estimate packet size  and determine
 # when to start a new packet
 MULTISERVICE_READ_OVERHEAD = 6
-READ_RESPONSE_OVERHEAD = 10
 
 MIN_VER_INSTANCE_IDS = 21  # using Symbol Instance Addressing not supported below version 21
 MIN_VER_LARGE_CONNECTIONS = 20  # >500 byte connections not supported below logix v20
 MIN_VER_EXTERNAL_ACCESS = 18  # ExternalAccess attributed added in v18
+
 MICRO800_PREFIX = '2080'  # catalog number prefix for Micro800 PLCs
 
 EXTENDED_SYMBOL = b'\x91'
@@ -57,9 +57,10 @@ STRUCTURE_READ_REPLY = b'\xa0\x02'
 SLC_CMD_CODE = b'\x0F'
 SLC_CMD_REPLY_CODE = b'\x4F'
 SLC_FNC_READ = b'\xa2'  # protected typed logical read w/ 3 address fields
-SLC_FNC_WRITE = b'\xaa'  # protected typed logical write w/ 3 address fields
+SLC_FNC_WRITE = b'\xab'  # protected typed logical masked write w/ 3 address fields
 SLC_REPLY_START = 61
 PCCC_PATH = b'\x67\x24\x01'
+
 
 ELEMENT_TYPE = {
     "8-bit": b'\x28',
@@ -125,7 +126,9 @@ class ConnectionManagerInstance(EnumMap):
     connection_timeout = b'\x08'
 
 
-class CommonService(EnumMap):
+class Services(EnumMap):
+
+    # Common CIP Services
     get_attributes_all = b'\x01'
     set_attributes_all = b'\x02'
     get_attribute_list = b'\x03'
@@ -149,6 +152,22 @@ class CommonService(EnumMap):
     insert_member = b'\x1A'
     remove_member = b'\x1B'
     group_sync = b'\x1C'
+
+    # Rockwell Custom Services
+    read_tag = b'\x4C'
+    read_tag_fragmented = b'\x52'
+    write_tag = b'\x4D'
+    write_tag_fragmented = b'\x53'
+    read_modify_write = b'\x4E'
+    get_instance_attribute_list = b'\x55'
+
+    @classmethod
+    def from_reply(cls, reply_service):
+        """
+        Get service from reply service code
+        """
+        val = cls.get(Pack.usint(Unpack.usint(reply_service) - 128))
+        return val
 
 
 class EncapsulationCommand(EnumMap):
@@ -179,25 +198,12 @@ class ClassCode(EnumMap):
 MSG_ROUTER_PATH = b''.join([CLASS_TYPE['8-bit'], ClassCode.message_router, INSTANCE_TYPE['8-bit'], b'\x01'])
 
 
-class TagService(EnumMap):
-    read_tag = b'\x4C'
-    read_tag_fragmented = b'\x52'
-    write_tag = b'\x4D'
-    write_tag_fragmented = b'\x53'
-    read_modify_write = b'\x4E'
-    get_instance_attribute_list = b'\x55'
-
-    @classmethod
-    def from_reply(cls, reply_service):
-        return cls.get(Pack.usint(Unpack.usint(reply_service) - 128))
-
-
 MULTI_PACKET_SERVICES = {
-    TagService.read_tag_fragmented,
-    TagService.write_tag_fragmented,
-    TagService.get_instance_attribute_list,
-    CommonService.multiple_service_request,
-    CommonService.get_attribute_list,
+    Services.read_tag_fragmented,
+    Services.write_tag_fragmented,
+    Services.get_instance_attribute_list,
+    Services.multiple_service_request,
+    Services.get_attribute_list,
 }
 
 
@@ -212,8 +218,13 @@ class AddressItem(EnumMap):
     uccm = b'\x00\x00'
 
 
-class DataTypeSize(EnumMap):
+class StringTypeLenSize(EnumMap):
+    short_string = 1
+    string = 2
+    logix_string = 4
 
+
+class DataTypeSize(EnumMap):
     bool = 1
     sint = 1
     usint = 1
@@ -228,8 +239,6 @@ class DataTypeSize(EnumMap):
     lint = 8
     ulint = 8
     lword = 8
-
-    short_string = 84
 
 
 class DataType(EnumMap):
@@ -444,7 +453,7 @@ EXTEND_CODES = {
 }
 
 
-PCCC_DATA_TYPE = {
+_PCCC_DATA_TYPE = {
     'N': b'\x89',
     'B': b'\x85',
     'T': b'\x86',
@@ -454,14 +463,23 @@ PCCC_DATA_TYPE = {
     'ST': b'\x8d',
     'A': b'\x8e',
     'R': b'\x88',
-    'O': b'\x8b',
-    'I': b'\x8c'
+    'O': b'\x82',  # or b'\x8b'?
+    'I': b'\x83',  # or b'\x8c'?
+    'L': b'\x91',
+    'MG': b'\x92',
+    'PD': b'\x93',
+    'PLS': b'\x94',
+}
+
+PCCC_DATA_TYPE = {
+    **_PCCC_DATA_TYPE,
+    **{v: k for k, v in _PCCC_DATA_TYPE.items()},
 }
 
 
 PCCC_DATA_SIZE = {
     'N': 2,
-    # 'L': 4,
+    'L': 4,
     'B': 2,
     'T': 6,
     'C': 6,
@@ -471,7 +489,10 @@ PCCC_DATA_SIZE = {
     'A': 2,
     'R': 6,
     'O': 2,
-    'I': 2
+    'I': 2,
+    'MG': 50,
+    'PD': 46,
+    'PLS': 12,
 }
 
 

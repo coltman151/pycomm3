@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 #
+# const.py - A set of structures and constants used to implement the Ethernet/IP protocol
+#
 # Copyright (c) 2020 Ian Ottoway <ian@ottoway.dev>
 # Copyright (c) 2014 Agostino Ruscito <ruscito@gmail.com>
 #
@@ -22,5 +24,36 @@
 # SOFTWARE.
 #
 
-__version_info__ = (0, 12, 0)
-__version__ = '.'.join(f'{x}' for x in __version_info__)
+
+"""
+Various utility functions.
+"""
+
+from typing import Tuple
+
+
+def strip_array(tag: str) -> str:
+    """
+    Strip off the array portion of the tag
+
+    'tag[100]' -> 'tag'
+
+    """
+    if '[' in tag:
+        return tag[:tag.find('[')]
+    return tag
+
+
+def get_array_index(tag: str) -> Tuple[str, int]:
+    """
+    Return tag name and array index from a 1-dim tag request
+
+    'tag[100]' -> ('tag', 100)
+    """
+    if tag.endswith(']') and '[' in tag:
+        tag, _tmp = tag.split('[')
+        idx = int(_tmp[:-1])
+    else:
+        idx = 0
+
+    return tag, idx
