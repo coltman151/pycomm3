@@ -265,7 +265,7 @@ class CIPDriver:
         """
         # handle the socket layer
         if self._connection_opened:
-            return
+            return True
         try:
             if self._sock is None:
                 self._sock = Socket()
@@ -350,7 +350,7 @@ class CIPDriver:
             request_data=b''.join(forward_open_msg),
             route_path=route_path,
             connected=False,
-            name='__FORWARD_OPEN__'
+            name='forward_open'
         )
 
         if response:
@@ -429,7 +429,7 @@ class CIPDriver:
             connected=False,
             route_path=route_path,
             request_data=b''.join(forward_close_msg),
-            name='__FORWARD_CLOSE__'
+            name='forward_close'
         )
         if response:
             self._target_is_connected = False
@@ -449,7 +449,8 @@ class CIPDriver:
                         name: str = 'generic',
                         connected: bool = True,
                         unconnected_send: bool = False,
-                        route_path: Union[bool, Sequence[CIPSegment], bytes] = True) -> Tag:
+                        route_path: Union[bool, Sequence[CIPSegment], bytes] = True,
+                        return_response_packet=False) -> Union[Tag, ResponsePacket]:
         """
         Perform a generic CIP message.  Similar to how MSG instructions work in Logix.
 
@@ -464,6 +465,7 @@ class CIPDriver:
         :param unconnected_send: (Unconnected Only) wrap service in an UnconnectedSend service
         :param route_path: (Unconnected Only) ``True`` to use current connection route to destination, ``False`` to ignore,
                            Or provide list of segments to be encoded as a PADDED_EPATH.
+        :param return_response_packet: returns the ``ResponsePacket`` rather than a ``Tag`` object
         :return: a Tag with the result of the request. (Tag.value for writes will be the request_data)
         """
 
@@ -492,10 +494,15 @@ class CIPDriver:
         req_class = RequestTypes.generic_connected if connected else RequestTypes.generic_unconnected
         request = req_class(**_kwargs)
 
-        self.__log.debug('Sending generic message: %s', name)
+        self.__log.info('Sending generic message: %s', name)
         response = self.send(request)
         if not response:
-            self.__log.debug('Generic message %s failed: %s', name, response.error)
+            self.__log.error('Generic message %r failed: %s', name, response.error)
+        else:
+            self.__log.info('Generic message %r completed', name)
+
+        if return_response_packet:
+            return response
 
         return Tag(name, response.value, None, error=response.error)
 
